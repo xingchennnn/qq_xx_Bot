@@ -52,8 +52,11 @@ async def handle_on_call(bot: Bot, event: Event):
     user_msg = event.get_plaintext().strip()
     
     # 检查是否以 - 开头
-    if user_msg.startswith("敕令"):
-        user_msg = user_msg[len("敕令"):].strip()  # 去掉开头的“敕令”二字
+    if user_msg.startswith("敕令") or user_msg.startswith("-"):
+        if user_msg.startswith("敕令"):
+            user_msg = user_msg[len("敕令"):].strip()  # 去掉开头的“敕令”二字
+        elif user_msg.startswith("-"):
+            user_msg = user_msg[1:].strip()  # 去掉开头的“-”符号
         # 目标机器人 QQ 号（小小）
         target_qq = "3889001741"
         
