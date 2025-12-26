@@ -44,3 +44,5 @@ async def wait_and_settle_bounty(bot: Bot, group_id: int, minutes: int, check_fu
         return
         
     await bot.send_group_msg(group_id=group_id, message=MessageSegment.at(TARGET_QQ) + " 悬赏令结算")
+    await asyncio.sleep(2)
+    await bot.send_group_msg(group_id=group_id, message=MessageSegment.at(TARGET_QQ) + " 悬赏令刷新")
