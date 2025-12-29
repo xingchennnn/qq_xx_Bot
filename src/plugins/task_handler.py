@@ -199,6 +199,11 @@ async def handle_task_reply(bot: Bot, event: GroupMessageEvent):
     # 已经在闭关
     if "道友现在在闭关呢" in msg_text or "已经在闭关中" in msg_text:
         state_data["seclusion_start_time"] = time.time()
+        # 如果在做宗门任务，直接结算悬赏令
+        await bot.send_group_msg(group_id=group_id,
+                                 message=MessageSegment.at(TARGET_QQ) +
+                                 " 宗门任务接取")
+
         return
     # 检查宗门闭关还是普通闭关
     if "道友现在正在宗门闭关室呢" in msg_text:
