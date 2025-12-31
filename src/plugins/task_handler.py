@@ -2,6 +2,7 @@ from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageSegment
 import asyncio
 import re
 import time
+import math
 from enum import Enum, auto
 from .common import TARGET_QQ, get_best_bounty, wait_and_settle_bounty
 
@@ -27,11 +28,11 @@ async def seclusion_out(bot: Bot, group_id: int):
     start_time = state_data.get("seclusion_start_time")
     if start_time:
         elapsed = time.time() - start_time
-        if elapsed < 60:
-            wait_time = 60 - elapsed + 2
+        if elapsed < 300:
+            wait_time = 300 - elapsed + 2
             await bot.send_group_msg(
                 group_id=group_id,
-                message=f"闭关时间不足1分钟，等待 {int(wait_time)} 秒...")
+                message=f"闭关时间不足5分钟，等待 {int(wait_time)} 秒...")
             await asyncio.sleep(wait_time)
         state_data.pop("seclusion_start_time", None)
 
@@ -81,7 +82,8 @@ async def start_bounty_task(bot: Bot,
         "doing_sect": False,  # 标记不在做宗门任务，开始做悬赏令
         "waiting_seclusion": False,
         "waiting_bounty_in_sect": False,
-        "settling_bounty_in_sect": False  # 标记当前正在结算宗门任务期间的悬赏令
+        "settling_bounty_in_sect": False,  # 标记当前正在结算宗门任务期间的悬赏令
+        "doing_bounty": False  # 标记悬赏令进行中
     }
 
     # 出关
@@ -226,6 +228,7 @@ async def handle_task_reply(bot: Bot, event: GroupMessageEvent):
         return
 
     if "道友现在在做悬赏令呢" in msg_text:
+
         state_data["seclusion_start_time"] = None
         # 如果在做宗门任务，直接结算悬赏令
         if state_data.get("doing_sect", False):
@@ -233,6 +236,8 @@ async def handle_task_reply(bot: Bot, event: GroupMessageEvent):
             await bot.send_group_msg(group_id=group_id,
                                      message=MessageSegment.at(TARGET_QQ) +
                                      " 悬赏令结算")
+        # else:
+        #     state_data["doing_bounty"] = True  # 标记悬赏令进行中
         return
 
     # ==================== 悬赏令相关 ====================
@@ -243,10 +248,11 @@ async def handle_task_reply(bot: Bot, event: GroupMessageEvent):
         # 悬赏令进行中 - 在做宗门任务期间，等待并结算
         if "悬赏令进行中" in msg_text and state_data.get("waiting_bounty_in_sect",
                                                    False):
-            time_match = re.search(r"预计剩余时间：(\d+)分钟", msg_text)
+            time_match = re.search(r"预计剩余时间：(\d+(?:\.\d+)?)分钟", msg_text)
             minutes = 1
             if time_match:
-                minutes = int(time_match.group(1)) + 1
+                minutes_val = float(time_match.group(1))
+                minutes = math.ceil(minutes_val) + 1
 
             state_data["waiting_bounty_in_sect"] = False
             await bot.send_group_msg(group_id=group_id,
@@ -279,6 +285,10 @@ async def handle_task_reply(bot: Bot, event: GroupMessageEvent):
             return
         return
 
+    #如果正在做悬赏令,return
+    if  state_data.get("doing_bounty", False):
+        return
+
     # 悬赏令刷新成功 - 显示列表
     if "天机悬赏令" in msg_text:
         remain_match = re.search(r"今日剩余(\d+)次", msg_text)
@@ -305,16 +315,18 @@ async def handle_task_reply(bot: Bot, event: GroupMessageEvent):
 
     # 悬赏令接取成功
     if "悬赏令接取成功" in msg_text:
-        time_match = re.search(r"预计时间：(\d+)分钟", msg_text)
+        time_match = re.search(r"预计时间：(\d+(?:\.\d+)?)分钟", msg_text)
         minutes = 10
         if time_match:
-            minutes = int(time_match.group(1))
+            minutes_val = float(time_match.group(1))
+            minutes = math.ceil(minutes_val)
 
         await bot.send_group_msg(group_id=group_id,
                                  message=f"接取成功，将在 {minutes} 分钟后自动结算")
 
         async def wait_and_settle():
             await asyncio.sleep(minutes * 60)
+            state_data["doing_bounty"] = False  # 标记悬赏令已完成
             if group_id in task_states:
                 await bot.send_group_msg(group_id=group_id,
                                          message=MessageSegment.at(TARGET_QQ) +
@@ -325,16 +337,19 @@ async def handle_task_reply(bot: Bot, event: GroupMessageEvent):
 
     # 悬赏令进行中 - 已经有悬赏在进行
     if "悬赏令进行中" in msg_text:
-        time_match = re.search(r"预计剩余时间：(\d+)分钟", msg_text)
+        time_match = re.search(r"预计剩余时间：(\d+(?:\.\d+)?)分钟", msg_text)
         minutes = 1
         if time_match:
-            minutes = int(time_match.group(1)) + 1
+            minutes_val = float(time_match.group(1))
+            minutes = math.ceil(minutes_val) + 1
 
         await bot.send_group_msg(group_id=group_id,
                                  message=f"检测到悬赏进行中，将在 {minutes} 分钟后自动结算")
+        state_data["doing_bounty"] = True  # 标记悬赏令进行中
 
         async def wait_and_settle():
             await asyncio.sleep(minutes * 60)
+            state_data["doing_bounty"] = False  # 标记悬赏令已完成
             if group_id in task_states:
                 await bot.send_group_msg(group_id=group_id,
                                          message=MessageSegment.at(TARGET_QQ) +
