@@ -51,6 +51,9 @@ class BotGUI:
         sys.stdout = TextRedirector(self.log_text)
         sys.stderr = TextRedirector(self.log_text)
 
+        #自动启动
+        self.start_bot()
+
     def start_bot(self):
         self.start_btn.config(state=tk.DISABLED, text="正在运行...")
         
